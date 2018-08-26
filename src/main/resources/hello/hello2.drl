@@ -1,0 +1,11 @@
+package com.cnblogs.yjmyzz.drools;
+
+import com.cnblogs.yjmyzz.drools.demo.model.Message;
+
+rule "global-demo"
+    salience -99
+    when
+        $message: Message(target.equals("beggar"))
+    then
+        System.out.println(temp);
+    end

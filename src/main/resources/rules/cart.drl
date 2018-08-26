@@ -1,0 +1,67 @@
+package com.cnblogs.yjmyzz.drools;
+
+import com.cnblogs.yjmyzz.drools.demo.model.*;
+
+/* 打印购物中有问题的商品 */
+rule "Print Cart Issues"
+    salience -1
+    when
+        $cart : Cart()
+    then
+        if ($cart.hasIssues()) {
+            System.out.println("\n打印购物中存在的问题详情-规则");
+            System.out.println("************************************");
+            System.out.println($cart.getCartIssues());
+            insert($cart.getPendingItems());
+        }
+end
+
+rule "Print Pending Items"
+    salience -2
+    when
+        $pendingItems : PendingItems()
+    then
+        System.out.println("\n打印购物中\"挂起\"的商品-规则");
+        System.out.println("************************************");
+        for (CartItem cartItem : $pendingItems.getCartItems()) {
+            System.out.println(cartItem);
+        }
+end
+
+
+rule "Mark the items processed"
+    salience -4
+    when
+        $cart : Cart()
+    then
+        System.out.println("\n处理有问题的商品-规则");
+        System.out.println("************************************");
+        for (CartItem cartItem : $cart.getCartItems()) {
+            if (cartItem.getCartStatus() != CartStatus.NEW || cartItem.getCartStatus() != CartStatus.PENDING) {
+                cartItem.updateAsProcessed();
+                System.out.println(cartItem + (cartItem.isErrors()? " 已被处理!":" 无需处理!"));
+                update(cartItem);
+            }
+        }
+end
+
+
+rule "Register Product"
+    salience -3
+    when
+        $cart : Cart()
+    then
+        System.out.println("\n处理等登记的商品-规则");
+        System.out.println("************************************");
+        for (CartItem cartItem : $cart.getCartItems()) {
+            if (cartItem.isErrors() && cartItem.getProduct().isRequiresRegistration()) {
+                $cart.getCustomer().registerProduct(cartItem.getProduct());
+                cartItem.setErrors(false);
+                cartItem.setError(null);
+                System.out.println(cartItem.getCart().getCustomer().getId() + " , " + cartItem + " 已登记！");
+                update(cartItem);
+            }
+        }
+end
+
+

@@ -1,0 +1,94 @@
+package com.cnblogs.yjmyzz.drools;
+
+import com.cnblogs.yjmyzz.drools.demo.model.*;
+import java.util.List;
+
+global List outOfStockProducts;
+
+function String pendingItemKey(CartItem cartItem) {
+    return cartItem.getCart().getCustomer().getId() + "-"+ cartItem.getProduct().getDesc();
+}
+
+//是否脱销？
+rule "Is Out-Of Stock"
+    when
+        $cartItem : CartItem(cartStatus != CartStatus.PROCESSED && product.getAvailableQty() == 0)
+    then
+        System.out.println("\n是否脱销-规则");
+        System.out.println("************************************");
+        String error = "无法处理商品： " +  $cartItem.getProduct().getDesc() + " ，该商品已脱销！" ;
+        System.out.println(error);
+        $cartItem.setErrors(true);
+        $cartItem.setError(error);
+        $cartItem.getCart().logItemError(pendingItemKey($cartItem), $cartItem);
+        outOfStockProducts.add($cartItem.getProduct());
+    end
+
+//校验商品数量
+rule "Verify Qty"
+    when
+        $cartItem : CartItem(cartStatus != CartStatus.PROCESSED, qty > product.getAvailableQty())
+    then
+        System.out.println("\n数量校验-规则");
+        System.out.println("************************************");
+        String error = "商品 " + $cartItem.getProduct().getDesc() + " 剩余数量：" +  $cartItem.getProduct().getAvailableQty() + " 低于购买数量： " + $cartItem.getQty();
+        System.out.println(error);
+        $cartItem.setErrors(true);
+        $cartItem.setError(error);
+        $cartItem.getCart().logItemError(pendingItemKey($cartItem), $cartItem);
+    end
+
+//优惠券减5%-规则
+rule "If has coupon, 5% discount"
+    when
+        $cartItem : CartItem(cartStatus != CartStatus.PROCESSED, cart.customer.coupon == "DISC01")
+    then
+        if (!$cartItem.isErrors()) {
+            System.out.println("\n优惠券-减5%-规则");
+            System.out.println("************************************");
+            double total = ((double)$cartItem.getCart().getTotalPrice());
+            double discount = total*0.05d;
+            System.out.println("优惠券折扣: " + $cartItem.getProduct() + ", 数量 " + $cartItem.getQty() + ", 折扣金额 " +  total + "*0.05=" + discount);
+            $cartItem.getCart().addDiscount(discount);
+        }
+    end
+
+//新用户减2%-规则
+rule "If new, 2% discount"
+    when
+        $cartItem : CartItem(cartStatus != CartStatus.PROCESSED, cart.customer.isNew())
+    then
+    if (!$cartItem.isErrors()) {
+        System.out.println("\n新用户-减2%-规则");
+        System.out.println("************************************");
+        double total = ((double)$cartItem.getCart().getTotalPrice());
+        double discount = total*0.2d;
+        System.out.println("新用户减2%规则: " + $cartItem.getProduct() + ", 数量 " + $cartItem.getQty() + ", 折扣金额 " +  total + "*0.02=" + discount);
+        $cartItem.getCart().addDiscount(discount);
+    }
+    end
+
+//是否有用户-登记商品-规则
+rule "Has customer registered for the product?"
+    salience 1
+    when
+        $cartItem : CartItem(cartStatus != CartStatus.PROCESSED, product.isRequiresRegistration(), !cart.customer.isRegistered(product))
+    then
+        System.out.println("\n检查商品是否有用户登记-规则");
+        System.out.println("************************************");
+        String error = $cartItem.getCart().getCustomer().getId() + "," +  $cartItem.getProduct() + " 需要登记. 顾客如需购买，请先登记!";
+        System.out.println(error);
+        $cartItem.setErrors(true);
+        $cartItem.setError(error);
+        $cartItem.getCart().logItemError(pendingItemKey($cartItem), $cartItem);
+    end
+
+//已处理商品，加入订单-规则
+rule "Add Processed CartItem to Order"
+    when
+        $cartItem : CartItem(cartStatus == CartStatus.PROCESSED)
+    then
+        System.out.println("\n已处理商品加入订单-规则");
+        System.out.println("************************************");
+        System.out.println("以下商品加入订单： " + $cartItem);
+    end
